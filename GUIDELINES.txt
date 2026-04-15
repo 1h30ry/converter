@@ -1,0 +1,5 @@
+If you plan on ever contributing (Thank you in advance) please keep this in mind
+
+-You can add file types, but please dont remove any
+-You can make changes to make the UI look better
+-You can optimize, improve or do anything to the code that you deem as good for it

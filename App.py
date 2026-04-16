@@ -21,16 +21,16 @@ def allowed_file(filename):
 
 def convert_file(input_path, output_path, output_format):
     ext = output_format.lower()
-    if ext in ['mp3', 'mp4', 'wav', 'avi', 'mov']:
-        # Use ffmpeg for audio/video
+    # Use ffmpeg for audio/video
+    if ext in {'mp3', 'mp4', 'wav', 'avi', 'mov'}:
         cmd = ['ffmpeg', '-y', '-i', input_path, output_path]
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    elif ext in ['jpg', 'jpeg', 'png', 'gif']:
-        # Use Pillow for images
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    # Use Pillow for images
+    elif ext in {'jpg', 'jpeg', 'png', 'gif'}:
         with Image.open(input_path) as img:
             img.save(output_path)
     else:
-        raise ValueError('Unsupported conversion')
+        raise ValueError(f'Unsupported conversion to {ext}')
 
 # Define allowed conversions: input_ext -> [output_ext1, output_ext2, ...]
 ALLOWED_CONVERSIONS = {
@@ -48,42 +48,34 @@ ALLOWED_CONVERSIONS = {
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file part')
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            flash('No file selected')
             return redirect(request.url)
-        file = request.files['file']
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(input_path)
-            input_ext = filename.rsplit('.', 1)[1].lower()
-            output_format = request.form['output_format']
-            # Check if this conversion is allowed
-            if output_format not in ALLOWED_CONVERSIONS.get(input_ext, []):
-                flash(f'Cannot convert {input_ext.upper()} to {output_format.upper()}')
-                return redirect(request.url)
-            base = os.path.splitext(filename)[0]
-            output_filename = f"{base}.{output_format}"
-            output_path = os.path.join(app.config['CONVERTED_FOLDER'], output_filename)
-            try:
-                convert_file(input_path, output_path, output_format)
-            except Exception as e:
-                flash(f'Conversion failed: {e}')
-                return redirect(request.url)
-            return redirect(url_for('download_file', filename=output_filename))
-        else:
+        if not allowed_file(file.filename):
             flash('File type not allowed')
             return redirect(request.url)
+        filename = secure_filename(file.filename)
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(input_path)
+        input_ext = filename.rsplit('.', 1)[1].lower()
+        output_format = request.form['output_format']
+        # Check if this conversion is allowed
+        if output_format not in ALLOWED_CONVERSIONS.get(input_ext, []):
+            flash(f'Cannot convert {input_ext.upper()} to {output_format.upper()}')
+            return redirect(request.url)
+        base = os.path.splitext(filename)[0]
+        output_filename = f"{base}.{output_format}"
+        output_path = os.path.join(app.config['CONVERTED_FOLDER'], output_filename)
+        try:
+            convert_file(input_path, output_path, output_format)
+        except Exception as e:
+            flash(f'Conversion failed: {e}')
+            return redirect(request.url)
+        return redirect(url_for('download_file', filename=output_filename))
     # For GET, determine allowed output formats for the dropdown (default: all if not recognized)
     input_ext = request.args.get('input_ext')
-    if input_ext in ALLOWED_CONVERSIONS:
-        allowed_outputs = ALLOWED_CONVERSIONS[input_ext]
-    else:
-        # Show all unique output formats if no file selected or unknown type
-        allowed_outputs = sorted(set(fmt for fmts in ALLOWED_CONVERSIONS.values() for fmt in fmts))
+    allowed_outputs = ALLOWED_CONVERSIONS.get(input_ext) or sorted({fmt for fmts in ALLOWED_CONVERSIONS.values() for fmt in fmts})
     return render_template('index.html', allowed_outputs=allowed_outputs)
 
 @app.route('/converted/<filename>')
